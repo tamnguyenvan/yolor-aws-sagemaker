@@ -9,7 +9,7 @@ import botocore
 import numpy as np
 import sagemaker
 
-from inference import input_fn, model_fn, output_fn, predict_fn
+from inference import input_fn, model_fn, predict_fn, output_fn
 
 
 def fetch_model(model_data):
@@ -25,27 +25,29 @@ def fetch_model(model_data):
     """
 
     model_dir = "/tmp/model"
-    if not os.path.exists(model_dir):
-        os.makedirs(model_dir)
+    model_path = os.path.join(model_dir, "model.tar.gz")
+    if not os.path.exists(model_path):
+        if not os.path.exists(model_dir):
+            os.makedirs(model_dir)
 
-    # if model_data.startswith("file"):
-    #     _check_model(model_data)
-    #     shutil.copy2(
-    #         os.path.join(model_dir, "model.tar.gz"), os.path.join(model_dir, "model.tar.gz")
-    #     )
-    elif model_data.startswith("s3"):
-        # get bucket name and object key
-        bucket_name = model_data.split("/")[2]
-        key = "/".join(model_data.split("/")[3:])
+        # if model_data.startswith("file"):
+        #     _check_model(model_data)
+        #     shutil.copy2(
+        #         os.path.join(model_dir, "model.tar.gz"), os.path.join(model_dir, "model.tar.gz")
+        #     )
+        elif model_data.startswith("s3"):
+            # get bucket name and object key
+            bucket_name = model_data.split("/")[2]
+            key = "/".join(model_data.split("/")[3:])
 
-        s3 = boto3.resource("s3")
-        try:
-            s3.Bucket(bucket_name).download_file(key, os.path.join(model_dir, "model.tar.gz"))
-        except botocore.exceptions.ClientError as e:
-            if e.response["Error"]["Code"] == "404":
-                print("the object does not exist.")
-            else:
-                raise
+            s3 = boto3.resource("s3")
+            try:
+                s3.Bucket(bucket_name).download_file(key, os.path.join(model_dir, "model.tar.gz"))
+            except botocore.exceptions.ClientError as e:
+                if e.response["Error"]["Code"] == "404":
+                    print("the object does not exist.")
+                else:
+                    raise
 
     # untar the model
     tar = tarfile.open(os.path.join(model_dir, "model.tar.gz"))
@@ -57,16 +59,18 @@ def fetch_model(model_data):
 
 def test(model_data):
     # decompress the model.tar.gz file
+    print('Fetching model')
     model_dir = fetch_model(model_data)
 
     # load the model
+    print('Loading model')
     net = model_fn(model_dir)
 
     # simulate some input data to test transform_fn
 
     # data = {"inputs": np.random.rand(16, 1, 28, 28).tolist()}
-    x = np.random.rand(1, 3, 480, 640)
-    data = {'inputs': x}
+    x = np.random.rand(1280, 1280, 3)
+    data = {'inputs': x.tolist()}
 
     # encode numpy array to binary stream
     serializer = sagemaker.serializers.JSONSerializer()
@@ -77,9 +81,11 @@ def test(model_data):
     # "send" the bin_stream to the endpoint for inference
     # inference container calls transform_fn to make an inference
     # and get the response body for the caller
-
+    
+    print('Predicting')
     content_type = "application/json"
     input_object = input_fn(jstr, content_type)
+    print(input_object.shape)
     predictions = predict_fn(input_object, net)
     res = output_fn(predictions, content_type)
     print(res)
@@ -89,5 +95,7 @@ def test(model_data):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--model', type=str, help='Path to model on s3')
-    model_data = parser.parse_args()
+    args = parser.parse_args()
+    model_data = args.model
+    print(model_data)
     test(model_data)
