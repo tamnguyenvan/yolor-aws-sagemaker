@@ -2,6 +2,7 @@ import os
 import io
 import time
 import math
+import json
 
 import cv2
 import torch
@@ -315,12 +316,17 @@ def model_fn(model_dir):
 
 def input_fn(request_body, request_content_type):
     """An input_fn that loads a pickled tensor"""
-    if request_content_type == 'application/octet-stream':
-        return Image.open(io.BytesIO(request_body)).convert('RGB')
-    else:
-        # Handle other content-types here or raise an Exception
-        # if the content type is not supported.
-        raise Exception(f'Unsupported content type: {request_content_type}')
+    # if request_content_type == 'application/octet-stream':
+    #     return Image.open(io.BytesIO(request_body)).convert('RGB')
+    # else:
+    #     # Handle other content-types here or raise an Exception
+    #     # if the content type is not supported.
+    #     raise Exception(f'Unsupported content type: {request_content_type}')
+    assert request_content_type == "application/json"
+    data = json.loads(request_body)["inputs"]
+    data = torch.tensor(data, dtype=torch.float32, device=device)
+    return data
+
 
 
 def predict_fn(input_data, model):
