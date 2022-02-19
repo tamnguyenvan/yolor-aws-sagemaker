@@ -70,17 +70,9 @@ def test(model_data):
     net = model_fn(model_dir)
 
     # simulate some input data to test transform_fn
+    x = np.array(Image.open('test.jpg').convert('RGB'))
 
-    # data = {"inputs": np.random.rand(16, 1, 28, 28).tolist()}
-    x = np.random.rand(320, 400, 3)
-#     data = {'inputs': x.tolist()}
-
-    # encode numpy array to binary stream
-#     serializer = sagemaker.serializers.JSONSerializer()
-
-#     jstr = serializer.serialize(data)
     t0 = time.time()
-#     jstr = json.dumps(data)
 
     # "send" the bin_stream to the endpoint for inference
     # inference container calls transform_fn to make an inference
@@ -91,10 +83,10 @@ def test(model_data):
     buffer = io.BytesIO()
     img = Image.fromarray(x)
     img.save(buffer, format='jpeg')
-    input_object = input_fn(buffer, content_type)
+    input_object = input_fn(buffer.getvalue(), content_type)
     print(input_object.shape)
     predictions = predict_fn(input_object, net)
-    res = output_fn(predictions, content_type)
+    res = output_fn(predictions, 'application/json')
     print(res)
     t1 = time.time()
     print('Duration:', t1 - t0)

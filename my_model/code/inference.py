@@ -139,12 +139,10 @@ def model_fn(model_dir):
 
 def input_fn(request_body, request_content_type):
     """An input_fn that loads a pickled tensor"""
-    if request_content_type == 'image/jpeg':
-        img = Image.open(io.BytesIO(request_body))
-        data = np.array(img)
-        return data
-    else:
-        raise errors.UnsupportedFormatError(request_content_type)
+    assert request_content_type == 'image/jpeg'
+    img = Image.open(io.BytesIO(request_body))
+    data = np.array(img)
+    return torch.tensor(data, dtype=torch.float32, device=device)
 
 #     assert request_content_type == "application/json"
 #     data = json.loads(request_body)["inputs"]
@@ -176,7 +174,7 @@ def predict_fn(input_data, model):
 
                 preds.append([x1, y1, x2, y2, conf, cls])
     
-    results = []
+    predictions = []
     if len(preds):
         preds = np.array(preds)
         clss = np.unique(preds[:, 5])
@@ -187,18 +185,18 @@ def predict_fn(input_data, model):
 
         preds = np.concatenate(nms_preds, 0)
 
-        out_data = preds[:, :4] / np.array([height, height, width, height])
+        out_data = preds[:, :4] / np.array([width, height, width, height])
         out_class = preds[:, 5:6]
         out_centers = (out_data[:, :2] + out_data[:, 2:4]) / 2
         out_wh = out_data[:, 2:4] - out_data[:, :2]
         out_data = np.concatenate([out_class, out_centers, out_wh], axis=1)
 
-        for class_id, cx, cy, w, h in out_data:
-            results.append([class_id, names[class_id], cx, cy, w, h, width, height])
-    return results
+    predictions = torch.tensor(out_data, dtype=torch.float32)
+    return predictions
 
 
 # postprocess
 def output_fn(predictions, content_type):
     assert content_type == "application/json"
-    return json.dumps(predictions)
+    res = predictions.cpu().numpy().tolist()
+    return json.dumps(res)
